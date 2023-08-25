@@ -1,0 +1,32 @@
+# Dependency directory
+node_modules
+
+# local env variables
+.env
+
+# truffle build directory
+build/
+# Coverage directory used by tools like istanbul
+coverage
+coverage.json
+
+# typechain
+typechain
+typechain-types
+
+#Hardhat files
+cache
+cache_hardhat
+artifacts
+storage_layout
+
+# Foundry
+/out
+/cache_foundry
+
+# IntelliJ IDE
+.idea
+
+# macOS
+.DS_Store
+tool
