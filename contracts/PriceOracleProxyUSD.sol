@@ -8,10 +8,11 @@ import "./Ownable.sol";
 
 contract PriceOracleProxyUSD is PriceOracle, Ownable, Exponential {
     /// @notice The minimum staleness check
-    uint256 private constant minStalenessCheck = 600; // 10 min in seconds
+    uint256 private constant minStalenessCheck = 600; // the number of seconds in 10 minutes
     /// @notice The maximum staleness check
-    uint256 private constant maxStalenessCheck = 5400; // 90 min in seconds
-    uint256 public oracleStalenessCheck = 3600;
+    uint256 private constant maxStalenessCheck = 5400; // the number of seconds in 90 minutes
+    /// @notice The current staleness check
+    uint256 public oracleStalenessCheck = 3600; // the number of seconds in 60 minutes
     /// @notice The max price diff that we could tolerant
     uint256 public maxPriceDiff = 0.1e18;
 
@@ -54,8 +55,8 @@ contract PriceOracleProxyUSD is PriceOracle, Ownable, Exponential {
     }
 
     /**
-     * @notice Try to get the underlying price of a cToken from Chain Link.
-     * @param cTokenAddress The token to get the underlying price of
+     * @notice Get the underlying price of a listed cToken asset
+     * @param cTokenAddress The cToken address
      * @return The price. Return 0 if the aggregator is not set.
      */
     function getPriceFromChainlink(address cTokenAddress) internal view returns (uint256) {
@@ -63,7 +64,7 @@ contract PriceOracleProxyUSD is PriceOracle, Ownable, Exponential {
         if (address(aggregator) != address(0)) {
             (, int256 answer, , uint256 updatedAt, ) = aggregator.latestRoundData();
             uint256 timeSinceUp = sub_(block.timestamp, updatedAt);
-            // It's fine for price to be 0. We have two price feeds.
+
             require(answer > 0 && timeSinceUp < oracleStalenessCheck, "invalid answer");
 
             // Extend the decimals to 1e18.
@@ -107,7 +108,7 @@ contract PriceOracleProxyUSD is PriceOracle, Ownable, Exponential {
 
     /**
      * @notice set a staleness check for the oracle; revert if it exceeds this value
-     * @dev Callable only by owner
+     * @dev Only callable by the owner
      */
     function _setOracleStalenessCheck(uint256 _oracleStalenessCheck) external onlyOwner {
         require(

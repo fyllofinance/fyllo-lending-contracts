@@ -73,24 +73,6 @@ contract CommonJumpRateModel is InterestRateModel {
     }
 
     /**
-     * @notice Update the parameters of the interest rate model (only callable by owner, i.e. Timelock)
-     * @param baseRatePerYear The approximate target base APR, as a mantissa (scaled by 1e18)
-     * @param multiplierPerYear The rate of increase in interest rate wrt utilization (scaled by 1e18)
-     * @param jumpMultiplierPerYear The multiplierPerSecond after hitting a specified utilization point
-     * @param kink_ The utilization point at which the jump multiplier is applied
-     * @param roof_ The utilization point at which the borrow rate is fixed
-     */
-    function updateJumpRateModel(
-        uint256 baseRatePerYear,
-        uint256 multiplierPerYear,
-        uint256 jumpMultiplierPerYear,
-        uint256 kink_,
-        uint256 roof_
-    ) external {
-        updateJumpRateModelInternal(baseRatePerYear, multiplierPerYear, jumpMultiplierPerYear, kink_, roof_);
-    }
-
-    /**
      * @notice Calculates the utilization rate of the market: `borrows / (cash + borrows - reserves)`
      * @param cash The amount of cash in the market
      * @param borrows The amount of borrows in the market
