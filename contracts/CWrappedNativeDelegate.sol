@@ -27,11 +27,9 @@ contract CWrappedNativeDelegate is CWrappedNative, CDelegateInterface {
         }
 
         require(msg.sender == admin, "!admin");
-        
-        uint256 balance = address(this).balance;
-        if (balance > 0) {
-            IWrappedNative(underlying).deposit.value(balance)();
-        }
+
+        // Set internal cash when becoming implementation
+        internalCash = getCashOnChain();
     }
 
     /**

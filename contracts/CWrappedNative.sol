@@ -9,7 +9,7 @@ import "./IWrappedNative.sol";
  * @notice CTokens which wrap an EIP-20 underlying
  * @author Compound
  */
-contract CWrappedNative is FToken, CErc20Storage {
+contract CWrappedNative is FToken, CWrappedNativeInterface {
     /**
      * @notice Initialize the new money market
      * @param underlying_ The address of the underlying asset
@@ -20,13 +20,15 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @param symbol_ ERC-20 symbol of this token
      * @param decimals_ ERC-20 decimal precision of this token
      */
-    function initialize(address underlying_,
-                        ComptrollerInterface comptroller_,
-                        InterestRateModel interestRateModel_,
-                        uint initialExchangeRateMantissa_,
-                        string memory name_,
-                        string memory symbol_,
-                        uint8 decimals_) public {
+    function initialize(
+        address underlying_,
+        ComptrollerInterface comptroller_,
+        InterestRateModel interestRateModel_,
+        uint256 initialExchangeRateMantissa_,
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_
+    ) public {
         // CToken initialize does the bulk of the work
         super.initialize(comptroller_, interestRateModel_, initialExchangeRateMantissa_, name_, symbol_, decimals_);
 
@@ -43,16 +45,17 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @dev Reverts upon any failure
      */
     function mint() external payable {
-        (uint err,) = mintInternal(msg.value);
+        (uint256 err, ) = mintInternal(msg.value);
         requireNoError(err, "!m");
     }
+
     /**
      * @notice Sender redeems cTokens in exchange for the underlying asset
      * @dev Accrues interest whether or not the operation succeeds, unless reverted
      * @param redeemTokens The number of cTokens to redeem into underlying
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeem(uint redeemTokens) external returns (uint) {
+    function redeem(uint256 redeemTokens) external returns (uint256) {
         return redeemInternal(redeemTokens);
     }
 
@@ -62,16 +65,16 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @param redeemAmount The amount of underlying to redeem
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
-    function redeemUnderlying(uint redeemAmount) external returns (uint) {
+    function redeemUnderlying(uint256 redeemAmount) external returns (uint256) {
         return redeemUnderlyingInternal(redeemAmount);
     }
 
     /**
-      * @notice Sender borrows assets from the protocol to their own address
-      * @param borrowAmount The amount of the underlying asset to borrow
-      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
-      */
-    function borrow(uint borrowAmount) external returns (uint) {
+     * @notice Sender borrows assets from the protocol to their own address
+     * @param borrowAmount The amount of the underlying asset to borrow
+     * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
+     */
+    function borrow(uint256 borrowAmount) external returns (uint256) {
         return borrowInternal(borrowAmount);
     }
 
@@ -80,7 +83,7 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
     function repayBorrow() external payable {
-        (uint err,) = repayBorrowInternal(msg.value);
+        (uint256 err, ) = repayBorrowInternal(msg.value);
         requireNoError(err, "!r");
     }
 
@@ -90,7 +93,7 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
     function repayBorrowBehalf(address borrower) external payable {
-        (uint err,) = repayBorrowBehalfInternal(borrower, msg.value);
+        (uint256 err, ) = repayBorrowBehalfInternal(borrower, msg.value);
         requireNoError(err, "!r");
     }
 
@@ -102,19 +105,38 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @param cTokenCollateral The market in which to seize collateral from the borrower
      */
     function liquidateBorrow(address borrower, CToken cTokenCollateral) external payable {
-        (uint err,) = liquidateBorrowInternal(borrower, msg.value, cTokenCollateral);
+        (uint256 err, ) = liquidateBorrowInternal(borrower, msg.value, cTokenCollateral);
         requireNoError(err, "!l");
     }
-
 
     /**
      * @notice A public function to sweep accidental ERC-20 transfers to this contract. Tokens are sent to admin (timelock)
      * @param token The address of the ERC-20 token to sweep
      */
     function sweepToken(EIP20NonStandardInterface token) external {
-    	require(address(token) != underlying);
-    	uint256 balance = token.balanceOf(address(this));
-    	token.transfer(admin, balance);
+        require(address(token) != underlying);
+        uint256 balance = token.balanceOf(address(this));
+        token.transfer(admin, balance);
+    }
+
+    /**
+     * @notice Absorb excess cash into reserves.
+     */
+    function gulp() external nonReentrant {
+        uint256 cashOnChain = getCashOnChain();
+        uint256 cashPrior = getCashPrior();
+        uint256 excessCash = sub_(cashOnChain, cashPrior);
+        uint256 totalReservesNew = add_(totalReserves, excessCash);
+
+        uint256 balance = address(this).balance;
+        if (balance > 0) {
+            IWrappedNative(underlying).deposit.value(balance)();
+            totalReserves = add_(totalReservesNew, balance);
+            internalCash = add_(cashOnChain, balance);
+        } else {
+            totalReserves = totalReservesNew;
+            internalCash = cashOnChain;
+        }
     }
 
     /**
@@ -124,7 +146,7 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @return uint 0=success, otherwise a failure (see ErrorReporter.sol for details)
      */
     function _addReserves() external payable returns (uint256) {
-       return _addReservesInternal(msg.value);
+        return _addReservesInternal(msg.value);
     }
 
     /*** Safe Token ***/
@@ -134,7 +156,16 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @dev This excludes the value of the current message, if any
      * @return The quantity of underlying tokens owned by this contract
      */
-    function getCashPrior() internal view returns (uint) {
+    function getCashPrior() internal view returns (uint256) {
+        return internalCash;
+    }
+
+    /**
+     * @notice Gets total balance of this contract in terms of the underlying
+     * @dev This excludes the value of the current message, if any
+     * @return The quantity of underlying tokens owned by this contract
+     */
+    function getCashOnChain() internal view returns (uint256) {
         EIP20Interface token = EIP20Interface(underlying);
         return token.balanceOf(address(this));
     }
@@ -145,67 +176,73 @@ contract CWrappedNative is FToken, CErc20Storage {
      * @param amount Amount of Ether being sent
      * @return The actual amount of Ether transferred
      */
-    function doTransferIn(address from, uint amount) internal returns (uint) {
+    function doTransferIn(address from, uint256 amount) internal returns (uint256) {
         // Sanity checks
         require(msg.sender == from);
         require(msg.value == amount, "value mismatch");
         IWrappedNative nativeWrapper = IWrappedNative(underlying);
+        uint256 balanceBefore = nativeWrapper.balanceOf(address(this));
         nativeWrapper.deposit.value(amount)();
-        return amount;
+        uint256 balanceAfter = nativeWrapper.balanceOf(address(this));
+        uint256 transferredIn = sub_(balanceAfter, balanceBefore);
+        internalCash = add_(internalCash, transferredIn);
+        return transferredIn;
     }
 
-    function doTransferOut(address payable to, uint amount) internal {
+    function doTransferOut(address payable to, uint256 amount) internal {
+        // Update the internal cash.
+        internalCash = sub_(internalCash, amount);
         /* Send the Ether, with minimal gas and revert on failure */
         IWrappedNative nativeWrapper = IWrappedNative(underlying);
         nativeWrapper.withdraw(amount);
         to.transfer(amount);
     }
 
-    function doFlashLoanTransferOut(address payable receiver, address wrapperToken, uint amount) internal {
+    function doFlashLoanTransferOut(address payable receiver, address wrapperToken, uint256 amount) internal {
         require(wrapperToken == underlying, "!token");
 
         IWrappedNative nativeWrapper = IWrappedNative(underlying);
         nativeWrapper.transfer(receiver, amount);
     }
 
-    function doFlashLoanTransferIn(address receiver, address wrapperToken, uint amount) internal {
+    function doFlashLoanTransferIn(address receiver, address wrapperToken, uint256 amount) internal {
         require(wrapperToken == underlying, "!token");
         IWrappedNative nativeWrapper = IWrappedNative(underlying);
-        uint balanceBefore = nativeWrapper.balanceOf(address(this));
+        uint256 balanceBefore = nativeWrapper.balanceOf(address(this));
 
         nativeWrapper.transferFrom(receiver, address(this), amount);
 
-        uint balanceAfter = nativeWrapper.balanceOf(address(this));
+        uint256 balanceAfter = nativeWrapper.balanceOf(address(this));
         require(balanceAfter >= balanceBefore);
         require(balanceAfter - balanceBefore == amount, "!amount");
     }
 
-    function requireNoError(uint errCode, string memory message) internal pure {
-        if (errCode == uint(Error.NO_ERROR)) {
+    function requireNoError(uint256 errCode, string memory message) internal pure {
+        if (errCode == uint256(Error.NO_ERROR)) {
             return;
         }
 
         bytes memory fullMessage = new bytes(bytes(message).length + 5);
-        uint i;
+        uint256 i;
 
         for (i = 0; i < bytes(message).length; i++) {
             fullMessage[i] = bytes(message)[i];
         }
 
-        fullMessage[i+0] = byte(uint8(32));
-        fullMessage[i+1] = byte(uint8(40));
-        fullMessage[i+2] = byte(uint8(48 + ( errCode / 10 )));
-        fullMessage[i+3] = byte(uint8(48 + ( errCode % 10 )));
-        fullMessage[i+4] = byte(uint8(41));
+        fullMessage[i + 0] = bytes1(uint8(32));
+        fullMessage[i + 1] = bytes1(uint8(40));
+        fullMessage[i + 2] = bytes1(uint8(48 + (errCode / 10)));
+        fullMessage[i + 3] = bytes1(uint8(48 + (errCode % 10)));
+        fullMessage[i + 4] = bytes1(uint8(41));
 
-        require(errCode == uint(Error.NO_ERROR), string(fullMessage));
+        require(errCode == uint256(Error.NO_ERROR), string(fullMessage));
     }
 
     function isNativeToken() public pure returns (bool) {
         return true;
     }
 
-    function validateFlashloanToken(address token) view internal {
+    function validateFlashLoanToken(address token) internal view {
         require(underlying == token);
     }
 

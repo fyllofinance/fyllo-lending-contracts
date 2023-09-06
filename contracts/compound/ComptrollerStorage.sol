@@ -2,31 +2,31 @@ pragma solidity ^0.5.16;
 
 import "./CToken.sol";
 import "./PriceOracle.sol";
+import "../FylloConfig.sol";
 
 contract UnitrollerAdminStorage {
     /**
-    * @notice Administrator for this contract
-    */
+     * @notice Administrator for this contract
+     */
     address public admin;
 
     /**
-    * @notice Pending administrator for this contract
-    */
+     * @notice Pending administrator for this contract
+     */
     address public pendingAdmin;
 
     /**
-    * @notice Active brains of Unitroller
-    */
-    address public comptrollerImplementation;
+     * @notice Active brains of Unitroller
+     */
+    address public implementation;
 
     /**
-    * @notice Pending brains of Unitroller
-    */
-    address public pendingComptrollerImplementation;
+     * @notice Pending brains of Unitroller
+     */
+    address public pendingImplementation;
 }
 
 contract ComptrollerV1Storage is UnitrollerAdminStorage {
-
     /**
      * @notice Oracle which gives the price of any given asset
      */
@@ -35,55 +35,47 @@ contract ComptrollerV1Storage is UnitrollerAdminStorage {
     /**
      * @notice Multiplier used to calculate the maximum repayAmount when liquidating a borrow
      */
-    uint public closeFactorMantissa;
+    uint256 public closeFactorMantissa;
 
     /**
      * @notice Multiplier representing the discount on collateral that a liquidator receives
      */
-    uint public liquidationIncentiveMantissa;
+    uint256 public liquidationIncentiveMantissa;
 
     /**
      * @notice Max number of assets a single account can participate in (borrow or use as collateral)
      */
-    uint public maxAssets;
+    uint256 public maxAssets;
 
     /**
      * @notice Per-account mapping of "assets you are in", capped by maxAssets
      */
     mapping(address => CToken[]) public accountAssets;
 
-}
-
-contract ComptrollerV2Storage is ComptrollerV1Storage {
     struct Market {
         /// @notice Whether or not this market is listed
         bool isListed;
-
         /**
          * @notice Multiplier representing the most one can borrow against their collateral in this market.
          *  For instance, 0.9 to allow borrowing 90% of collateral value.
          *  Must be between 0 and 1, and stored as a mantissa.
          */
-        uint collateralFactorMantissa;
-
+        uint256 collateralFactorMantissa;
         /// @notice Per-market mapping of "accounts in this asset"
         mapping(address => bool) accountMembership;
-
         /// @notice Whether or not this market receives COMP
         bool isComped;
-
         /**
          *  @notice Multiplier representing the most one can borrow the asset.
          *  For instance, 0.5 to allow borrowing this asset 50% * collateral value * collateralFactor.
          *  When calculating equity, 0.5 with 100 borrow balance will produce 200 borrow value
          *  Must be between (0, 1], and stored as a mantissa.
          */
-        uint borrowFactorMantissa;
-
+        uint256 borrowFactorMantissa;
         /**
          * @notice Multiplier representing the discount on collateral that a liquidator receives
          */
-        uint liquidationIncentiveMantissa;
+        uint256 liquidationIncentiveMantissa;
     }
 
     /**
@@ -91,7 +83,6 @@ contract ComptrollerV2Storage is ComptrollerV1Storage {
      * @dev Used e.g. to determine if a market is supported
      */
     mapping(address => Market) public markets;
-
 
     /**
      * @notice The Pause Guardian can pause certain actions as a safety mechanism.
@@ -105,25 +96,22 @@ contract ComptrollerV2Storage is ComptrollerV1Storage {
     bool public seizeGuardianPaused;
     mapping(address => bool) public mintGuardianPaused;
     mapping(address => bool) public borrowGuardianPaused;
-}
 
-contract ComptrollerV3Storage is ComptrollerV2Storage {
     struct CompMarketState {
         /// @notice The market's last updated compBorrowIndex or compSupplyIndex
         uint224 index;
-
-        /// @notice The block number the index was last updated at
-        uint32 block;
+        /// @notice The block timestamp the index was last updated at
+        uint32 timestamp;
     }
 
     /// @notice A list of all markets
     CToken[] public allMarkets;
 
-    /// @notice The rate at which the flywheel distributes COMP, per block
-    uint public compRate;
+    /// @notice The rate at which the flywheel distributes COMP, per second
+    uint256 public compRate;
 
     /// @notice The portion of compRate that each market currently receives
-    mapping(address => uint) public compSpeeds;
+    mapping(address => uint256) public compSpeeds;
 
     /// @notice The COMP market supply state for each market
     mapping(address => CompMarketState) public compSupplyState;
@@ -132,11 +120,20 @@ contract ComptrollerV3Storage is ComptrollerV2Storage {
     mapping(address => CompMarketState) public compBorrowState;
 
     /// @notice The COMP borrow index for each market for each supplier as of the last time they accrued COMP
-    mapping(address => mapping(address => uint)) public compSupplierIndex;
+    mapping(address => mapping(address => uint256)) public compSupplierIndex;
 
     /// @notice The COMP borrow index for each market for each borrower as of the last time they accrued COMP
-    mapping(address => mapping(address => uint)) public compBorrowerIndex;
+    mapping(address => mapping(address => uint256)) public compBorrowerIndex;
 
     /// @notice The COMP accrued but not yet transferred to each user
-    mapping(address => uint) public compAccrued;
+    mapping(address => uint256) public compAccrued;
+
+    FylloConfig public fylloCfg;
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     */
+    uint256[28] private __gap;
 }
